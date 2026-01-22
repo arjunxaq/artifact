@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  frontend:
+    build: ./frontend
+    container_name: artifact-frontend
+    ports:
+      - "3000:80"
+    
