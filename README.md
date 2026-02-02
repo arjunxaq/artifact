@@ -215,3 +215,26 @@ http://localhost:8000
 ### To stop containers:
 
 docker compose down
+
+### Branching Strategy:
+1. main:
+Represents stable and deployable code, Always contains working, tested features
+
+2️. Develop: 
+Active development branch
+All features are merged here first
+
+Used for:
+Integration testing
+Combining completed features
+
+3️. feature/*: 
+Used to develop individual features
+Created from develop
+Merged back into develop when complete
+
+Examples:
+feature/authentication
+feature/contract-upload
+feature/contract-list
+
