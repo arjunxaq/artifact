@@ -43,3 +43,24 @@ export async function createContract({
 
     return contract;
 }
+
+
+export async function getMyContracts(ownerId) {
+    const { data, error } = await supabase
+        .from("contracts")
+        .select(`
+      id,
+      title,
+      created_at,
+      contract_signees (
+        id,
+        email,
+        status
+      )
+    `)
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data;
+}
