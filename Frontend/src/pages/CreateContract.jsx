@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { createContract } from "../api/contracts.api";
+import { createContract } from "../api/backend/contracts.api";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../api/supabaseClient";
 
 export default function CreateContract() {
     const { user } = useAuth();
+
     const [title, setTitle] = useState("");
     const [file, setFile] = useState(null);
     const [emails, setEmails] = useState("");
@@ -18,10 +20,14 @@ export default function CreateContract() {
         setLoading(true);
 
         try {
-            await createContract({
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
+            if (!token) throw new Error("Not authenticated");
+
+            await createContract(token, {
                 title,
                 file,
-                ownerId: user.id,
                 emails: emails.split(",").map((e) => e.trim()),
             });
 
@@ -35,6 +41,10 @@ export default function CreateContract() {
             setLoading(false);
         }
     };
+
+    if (!user) {
+        return <p>Please login first.</p>;
+    }
 
     return (
         <div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { getMyContracts } from "../api/contracts.api";
+import { getMyContracts } from "../api/backend/contracts.api";
+import { supabase } from "../api/supabaseClient";
 
 export default function Contracts() {
     const { user } = useAuth();
@@ -11,7 +12,12 @@ export default function Contracts() {
     useEffect(() => {
         async function loadContracts() {
             try {
-                const data = await getMyContracts(user.id);
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+
+                if (!token) throw new Error("Not authenticated");
+
+                const data = await getMyContracts(token);
                 setContracts(data);
             } catch (err) {
                 setError(err.message);
@@ -20,8 +26,12 @@ export default function Contracts() {
             }
         }
 
-        loadContracts();
-    }, [user.id]);
+        if (user) {
+            loadContracts();
+        } else {
+            setLoading(false);
+        }
+    }, [user]);
 
     if (loading) {
         return <p>Loading contracts...</p>;
@@ -47,7 +57,8 @@ export default function Contracts() {
 
             <div className="space-y-4">
                 {contracts.map((contract) => {
-                    const signees = contract.contract_signees;
+                    const signees = contract.contract_signees || [];
+
                     const allSigned =
                         signees.length > 0 &&
                         signees.every((s) => s.status === "signed");
@@ -61,10 +72,12 @@ export default function Contracts() {
                                 <h2 className="font-semibold text-lg">
                                     {contract.title}
                                 </h2>
+
                                 <p className="text-sm text-slate-500">
                                     Created on{" "}
                                     {new Date(contract.created_at).toLocaleDateString()}
                                 </p>
+
                                 <p className="text-sm text-slate-600">
                                     {signees.length} signee(s)
                                 </p>
