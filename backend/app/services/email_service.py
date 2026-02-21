@@ -12,7 +12,7 @@ def send_invite_email(email: str, invite_token: str, contract_title: str):
     invite_link = f"{FRONTEND_URL}/invite/{invite_token}"
 
     resend.Emails.send({
-        "from": "contracts@yourdomain.com",
+        "from": "Artifact <onboarding@resend.dev>",
         "to": email,
         "subject": f"You’ve been invited to sign: {contract_title}",
         "html": f"""

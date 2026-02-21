@@ -76,7 +76,25 @@ async def get_contract_file(contract_id: str, user=Depends(get_current_user)):
 
     return signed_url
 
+#to fetch teh contracts that are assigned to the user
+@router.get("/contracts/assigned")
+async def get_assigned_contracts(user=Depends(get_current_user)):
+    
+    response = supabase.table("contract_signees") \
+        .select("""
+            id,
+            status,
+            contracts (
+                id,
+                title,
+                created_at,
+                owner_id
+            )
+        """) \
+        .or_(f"user_id.eq.{user.id},email.eq.{user.email}") \
+        .execute()
 
+    return response.data
 
 
 

@@ -4,6 +4,7 @@ import Signup from "./pages/Signup";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Contracts from "./pages/Contracts";
+import Invite from "./pages/Invite";
 import CreateContract from "./pages/CreateContract";
 import { useAuth } from "./context/AuthContext";
 
@@ -33,6 +34,7 @@ function App() {
           element={user ? <DashboardLayout /> : <Navigate to="/login" />}
         >
           <Route index element={<Dashboard />} />
+          <Route path="/invite/:token" element={<Invite />} />
           <Route path="contracts" element={<Contracts />} />
           <Route path="create" element={<CreateContract />} />
         </Route>
