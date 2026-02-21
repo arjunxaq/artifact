@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import contracts
-from app.routes import invite
+
 
 app = FastAPI()
 
@@ -14,4 +14,3 @@ app.add_middleware(
 )
 
 app.include_router(contracts.router, prefix="/api")
-app.include_router(invite.router,prefix="/api")

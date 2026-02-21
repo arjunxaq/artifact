@@ -35,8 +35,23 @@ export const AuthProvider = ({ children }) => {
 
 
     const login = async (email, password) => {
-        return supabase.auth.signInWithPassword({ email, password });
-    };
+    const result = await supabase.auth.signInWithPassword({
+        email,
+        password,
+    });
+
+    if (result.data?.session) {
+        await fetch("http://localhost:8000/api/contracts/link", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${result.data.session.access_token}`,
+            },
+        });
+    }
+
+    return result;
+};
+
 
     const logout = async () => {
         return supabase.auth.signOut();

@@ -5,9 +5,21 @@ from typing import List
 import time
 
 import uuid
-from app.services.email_service import send_invite_email
+
 
 router = APIRouter()
+
+@router.post("/contracts/link")
+async def link_contracts(user=Depends(get_current_user)):
+
+    supabase.table("contract_signees") \
+        .update({"user_id": user.id}) \
+        .eq("email", user.email) \
+        .is_("user_id", None) \
+        .execute()
+
+    return {"message": "Contracts linked"}
+
 
 #create contracts
 @router.post("/contracts")
@@ -44,19 +56,15 @@ async def create_contract(
     signee_rows = []
 
     for email in email_list:
-        invite_token = str(uuid.uuid4())
-
         signee_rows.append({
             "contract_id": contract_data["id"],
             "email": email,
             "status": "pending",
-            "invite_token": invite_token
+            "user_id": None
         })
 
-        # Send email
-        send_invite_email(email, invite_token, title)
-
     supabase.table("contract_signees").insert(signee_rows).execute()
+
 
     return contract_data
 
@@ -90,14 +98,14 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
                 id,
                 title,
                 created_at,
-                owner_id,
                 owner_email
             )
         """) \
-        .or_(f"user_id.eq.{user.id},email.eq.{user.email}") \
+        .eq("user_id", user.id) \
         .execute()
 
     return response.data
+
 
 
 
