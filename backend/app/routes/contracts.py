@@ -84,11 +84,14 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
         .select("""
             id,
             status,
-            contracts (
+            signed_at,
+            rejected_at,
+            contracts_with_creator (
                 id,
                 title,
                 created_at,
-                owner_id
+                owner_id,
+                owner_email
             )
         """) \
         .or_(f"user_id.eq.{user.id},email.eq.{user.email}") \
@@ -98,27 +101,32 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
 
 
 
+
 #fetch contracts
 @router.get("/contracts")
-async def get_my_contracts(user = Depends(get_current_user)):
-    owner_id = user.id
+async def get_my_contracts(user=Depends(get_current_user)):
 
-    response = supabase.table("contracts") \
+    response = supabase.table("contracts_with_creator") \
         .select("""
             id,
             title,
             created_at,
+            owner_id,
+            owner_email,
             contract_signees (
                 id,
                 email,
-                status
+                status,
+                signed_at,
+                rejected_at
             )
         """) \
-        .eq("owner_id", owner_id) \
+        .eq("owner_id", user.id) \
         .order("created_at", desc=True) \
         .execute()
 
     return response.data
+
 
 #sign contract
 @router.post("/sign/{token}")
