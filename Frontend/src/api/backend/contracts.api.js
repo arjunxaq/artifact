@@ -15,18 +15,30 @@ export async function getMyContracts(token) {
     return response.json();
 }
 
-export async function createContract(token, { title, file, emails }) {
+export async function createContract(token, data) {
     const formData = new FormData();
-    formData.append("title", title);
-    formData.append("file", file);
-    formData.append("emails", emails.join(","));
+
+    formData.append("title", data.title);
+    formData.append("emails", data.emails.join(","));
+
+    if (data.templateId) {
+        formData.append("template_id", data.templateId);
+        formData.append(
+            "template_data",
+            JSON.stringify(data.templateData)
+        );
+    }
+
+    if (data.file) {
+        formData.append("file", data.file);
+    }
 
     const response = await fetch(`${API_BASE}/contracts`, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
         },
-        body: formData
+        body: formData,
     });
 
     if (!response.ok) {

@@ -34,17 +34,26 @@ export const AuthProvider = ({ children }) => {
     };
 
 
-    const login = async (email, password) => {
+const login = async (email, password) => {
     const result = await supabase.auth.signInWithPassword({
         email,
         password,
     });
 
     if (result.data?.session) {
+        const token = result.data.session.access_token;
+
         await fetch("http://localhost:8000/api/contracts/link", {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${result.data.session.access_token}`,
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        await fetch("http://localhost:8000/api/keys/init", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
             },
         });
     }

@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from app.dependencies import get_current_user
 from app.services.supabase_client import supabase
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from app.services.key_service import decrypt_private_key
+from app.services.template_service import render_template_to_pdf
+from app.services.key_service import generate_rsa_key_pair
 from typing import List
 import time
-
+import os
 import uuid
+import hashlib
+import json
 
 
 router = APIRouter()
@@ -21,52 +28,7 @@ async def link_contracts(user=Depends(get_current_user)):
     return {"message": "Contracts linked"}
 
 
-#create contracts
-@router.post("/contracts")
-async def create_contract(
-    title: str = Form(...),
-    emails: str = Form(...),  # comma separated
-    file: UploadFile = File(...),
-    user = Depends(get_current_user)
-):
-    owner_id = user.id
 
-    # 1. Upload file
-    file_path = f"{owner_id}/{int(time.time())}_{file.filename}"
-
-    file_bytes = await file.read()
-
-    supabase.storage.from_("contracts").upload(
-        file_path,
-        file_bytes
-    )
-
-    # 2. Insert contract
-    contract = supabase.table("contracts").insert({
-        "title": title,
-        "owner_id": owner_id,
-        "file_path": file_path
-    }).execute()
-
-    contract_data = contract.data[0]
-
-    # 3. Insert signees
-    email_list = [e.strip() for e in emails.split(",")]
-
-    signee_rows = []
-
-    for email in email_list:
-        signee_rows.append({
-            "contract_id": contract_data["id"],
-            "email": email,
-            "status": "pending",
-            "user_id": None
-        })
-
-    supabase.table("contract_signees").insert(signee_rows).execute()
-
-
-    return contract_data
 
 @router.get("/contracts/{contract_id}/file")
 async def get_contract_file(contract_id: str, user=Depends(get_current_user)):
@@ -121,6 +83,7 @@ async def get_my_contracts(user=Depends(get_current_user)):
             created_at,
             owner_id,
             owner_email,
+            status,
             contract_signees (
                 id,
                 email,
@@ -136,55 +99,8 @@ async def get_my_contracts(user=Depends(get_current_user)):
     return response.data
 
 
-#sign in contract modal
-@router.post("/contracts/{signee_id}/sign")
-async def sign_contract(signee_id: str, user=Depends(get_current_user)):
-
-    # Ensure this signee belongs to logged in user
-    signee = supabase.table("contract_signees") \
-        .select("*") \
-        .eq("id", signee_id) \
-        .eq("user_id", user.id) \
-        .single() \
-        .execute()
-
-    if not signee.data:
-        raise HTTPException(status_code=403, detail="Not allowed")
-
-    supabase.table("contract_signees") \
-        .update({
-            "status": "signed",
-            "signed_at": "now()"
-        }) \
-        .eq("id", signee_id) \
-        .execute()
-
-    return {"message": "Contract signed"}
 
 
-#reject contract inside contract modal
-@router.post("/contracts/{signee_id}/reject")
-async def reject_contract(signee_id: str, user=Depends(get_current_user)):
-
-    signee = supabase.table("contract_signees") \
-        .select("*") \
-        .eq("id", signee_id) \
-        .eq("user_id", user.id) \
-        .single() \
-        .execute()
-
-    if not signee.data:
-        raise HTTPException(status_code=403, detail="Not allowed")
-
-    supabase.table("contract_signees") \
-        .update({
-            "status": "rejected",
-            "rejected_at": "now()"
-        }) \
-        .eq("id", signee_id) \
-        .execute()
-
-    return {"message": "Contract rejected"}
 
 #sign contract
 @router.post("/sign/{token}")
@@ -230,4 +146,271 @@ async def reject_contract(token: str, user=Depends(get_current_user)):
         .eq("invite_token", token) \
         .execute()
 
-    return {"message": "Rejected successfully"}
+#sign in contract modal
+@router.post("/contracts/{signee_id}/sign")
+async def sign_contract(signee_id: str, user=Depends(get_current_user)):
+
+    # 1️⃣ Verify signee belongs to user
+    signee = supabase.table("contract_signees") \
+        .select("*") \
+        .eq("id", signee_id) \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+
+    if not signee.data:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if signee.data["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Already processed")
+
+    contract_id = signee.data["contract_id"]
+
+    # 2️⃣ Fetch contract
+    contract = supabase.table("contracts") \
+        .select("*") \
+        .eq("id", contract_id) \
+        .single() \
+        .execute()
+
+    if not contract.data:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if contract.data["status"] == "REJECTED":
+        raise HTTPException(status_code=400, detail="Contract rejected")
+
+    pdf_hash = contract.data["pdf_hash"]
+
+    # 3️⃣ Fetch user private key
+    key_record = supabase.table("user_keys") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+
+    if not key_record.data:
+        raise HTTPException(status_code=400, detail="Keys not initialized")
+
+    encrypted_private_key = key_record.data["encrypted_private_key"]
+
+    private_key = decrypt_private_key(encrypted_private_key)
+
+    # 4️⃣ Sign the hash using RSA-PSS
+    signature = private_key.sign(
+        pdf_hash.encode(),
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+
+    # 5️⃣ Store signature
+    supabase.table("signatures").insert({
+        "contract_id": contract_id,
+        "signer_id": user.id,
+        "signature_value": signature.hex(),
+        "signed_hash": pdf_hash,
+        "algorithm": "RSA-PSS-SHA256"
+    }).execute()
+
+    # 6️⃣ Update signee status
+    supabase.table("contract_signees") \
+        .update({
+            "status": "signed",
+            "signed_at": "now()"
+        }) \
+        .eq("id", signee_id) \
+        .execute()
+
+    # 7️⃣ Check if all signers signed
+    all_signees = supabase.table("contract_signees") \
+        .select("*") \
+        .eq("contract_id", contract_id) \
+        .execute()
+
+    statuses = [s["status"] for s in all_signees.data]
+
+    if all(status == "signed" for status in statuses):
+        supabase.table("contracts") \
+            .update({"status": "SIGNED"}) \
+            .eq("id", contract_id) \
+            .execute()
+    else:
+        supabase.table("contracts") \
+            .update({"status": "PARTIALLY_SIGNED"}) \
+            .eq("id", contract_id) \
+            .execute()
+
+    return {"message": "Digital signature stored"}
+
+
+#reject contract inside contract modal
+@router.post("/contracts/{signee_id}/reject")
+async def reject_contract(signee_id: str, user=Depends(get_current_user)):
+
+    signee = supabase.table("contract_signees") \
+        .select("*") \
+        .eq("id", signee_id) \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+
+    if not signee.data:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    contract_id = signee.data["contract_id"]
+
+    # Update signee
+    supabase.table("contract_signees") \
+        .update({
+            "status": "rejected",
+            "rejected_at": "now()"
+        }) \
+        .eq("id", signee_id) \
+        .execute()
+
+    # Entire contract becomes rejected
+    supabase.table("contracts") \
+        .update({"status": "REJECTED"}) \
+        .eq("id", contract_id) \
+        .execute()
+
+    return {"message": "Contract rejected"}
+#create contracts
+
+
+
+
+@router.post("/contracts")
+async def create_contract(
+    title: str = Form(...),
+    emails: str = Form(...),
+    template_id: str = Form(None),
+    template_data: str = Form(None),
+    file: UploadFile = File(None),
+    user=Depends(get_current_user),
+):
+
+    owner_id = user.id
+
+    # -----------------------------
+    # TEMPLATE MODE
+    # -----------------------------
+    if template_id:
+
+        template_response = supabase.table("templates") \
+            .select("*") \
+            .eq("id", template_id) \
+            .single() \
+            .execute()
+
+        if not template_response.data:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        html_content = template_response.data["html_content"]
+
+        context = json.loads(template_data)
+
+        temp_pdf_path, pdf_hash = render_template_to_pdf(
+            html_content,
+            context
+        )
+
+        file_path = f"{owner_id}/{int(time.time())}.pdf"
+
+        with open(temp_pdf_path, "rb") as f:
+            supabase.storage.from_("contracts").upload(
+                file_path,
+                f.read(),
+                {"content-type": "application/pdf"}
+            )
+
+        os.remove(temp_pdf_path)
+
+    # -----------------------------
+    # CUSTOM UPLOAD MODE
+    # -----------------------------
+    elif file:
+
+        file_bytes = await file.read()
+
+        pdf_hash = hashlib.sha256(file_bytes).hexdigest()
+
+        file_path = f"{owner_id}/{int(time.time())}_{file.filename}"
+
+        supabase.storage.from_("contracts").upload(
+            file_path,
+            file_bytes,
+            {"content-type": "application/pdf"}
+        )
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide template_id or file"
+        )
+
+    # -----------------------------
+    # CREATE CONTRACT RECORD
+    # -----------------------------
+    contract = supabase.table("contracts").insert({
+        "title": title,
+        "owner_id": owner_id,
+        "template_id": template_id,
+        "file_path": file_path,
+        "pdf_hash": pdf_hash,
+        "status": "PENDING"
+    }).execute()
+
+    contract_data = contract.data[0]
+
+    # -----------------------------
+    # INSERT SIGNEES
+    # -----------------------------
+    email_list = [e.strip() for e in emails.split(",")]
+
+    signee_rows = [
+        {
+            "contract_id": contract_data["id"],
+            "email": email,
+            "status": "pending"
+        }
+        for email in email_list
+    ]
+
+    supabase.table("contract_signees").insert(signee_rows).execute()
+
+    return contract_data
+
+
+@router.post("/keys/init")
+async def initialize_user_keys(user=Depends(get_current_user)):
+
+    existing = supabase.table("user_keys") \
+        .select("*") \
+        .eq("user_id", user.id) \
+        .execute()
+
+    if existing.data:
+        return {"message": "Keys already exist"}
+
+    public_key, encrypted_private_key = generate_rsa_key_pair()
+
+    supabase.table("user_keys").insert({
+        "user_id": user.id,
+        "public_key": public_key,
+        "encrypted_private_key": encrypted_private_key
+    }).execute()
+
+    return {"message": "Keys generated"}
+
+
+@router.get("/templates")
+async def get_templates(user=Depends(get_current_user)):
+    response = supabase.table("templates") \
+        .select("id, name, html_content") \
+        .execute()
+
+    return response.data
+
