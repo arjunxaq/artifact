@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi.responses import Response
 from app.dependencies import get_current_user
 from app.services.supabase_client import supabase
 from cryptography.hazmat.primitives import hashes
@@ -30,6 +31,48 @@ async def link_contracts(user=Depends(get_current_user)):
 
     return {"message": "Contracts linked"}
 
+#resend contract 
+@router.post("/contracts/{contract_id}/resend")
+async def resend_contract(contract_id: str, user=Depends(get_current_user)):
+
+    contract = supabase.table("contracts") \
+        .select("*") \
+        .eq("id", contract_id) \
+        .single() \
+        .execute()
+
+    if not contract.data:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    if contract.data["owner_id"] != user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if contract.data["status"] != "REJECTED":
+        raise HTTPException(status_code=400, detail="Contract not rejected")
+
+    # Reset contract status
+    supabase.table("contracts") \
+        .update({"status": "PENDING"}) \
+        .eq("id", contract_id) \
+        .execute()
+
+    # Reset signees
+    supabase.table("contract_signees") \
+        .update({
+            "status": "pending",
+            "signed_at": None,
+            "rejected_at": None
+        }) \
+        .eq("contract_id", contract_id) \
+        .execute()
+
+    # Delete signatures
+    supabase.table("signatures") \
+        .delete() \
+        .eq("contract_id", contract_id) \
+        .execute()
+
+    return {"message": "Contract reset for resend"}
 
 
 
@@ -72,7 +115,71 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
     return response.data
 
 
+#contract details endpoint
+@router.get("/contracts/{contract_id}")
+async def get_contract_details(contract_id: str, user=Depends(get_current_user)):
 
+    # Fetch contract
+    contract = supabase.table("contracts_with_creator") \
+        .select("""
+            id,
+            title,
+            created_at,
+            owner_id,
+            owner_email,
+            status
+        """) \
+        .eq("id", contract_id) \
+        .single() \
+        .execute()
+
+    if not contract.data:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    # Fetch signees
+    signees = supabase.table("contract_signees") \
+        .select("""
+            id,
+            email,
+            status,
+            signed_at,
+            rejected_at
+        """) \
+        .eq("contract_id", contract_id) \
+        .execute()
+
+    return {
+        "contract": contract.data,
+        "signees": signees.data
+    }
+
+#download contracts
+@router.get("/contracts/{contract_id}/download")
+async def download_contract(contract_id: str, user=Depends(get_current_user)):
+
+    contract = supabase.table("contracts") \
+        .select("file_path") \
+        .eq("id", contract_id) \
+        .single() \
+        .execute()
+
+    if not contract.data:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    file_path = contract.data["file_path"]
+
+    file_bytes = supabase.storage.from_("contracts").download(file_path)
+
+    if not file_bytes:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return Response(
+        content=file_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=contract.pdf"
+        }
+    )
 
 
 #fetch contracts
@@ -100,6 +207,7 @@ async def get_my_contracts(user=Depends(get_current_user)):
         .execute()
 
     return response.data
+
 
 
 
