@@ -12,6 +12,9 @@ import os
 import uuid
 import hashlib
 import json
+from cryptography.hazmat.primitives import serialization
+from cryptography.exceptions import InvalidSignature
+import tempfile
 
 
 router = APIRouter()
@@ -414,3 +417,101 @@ async def get_templates(user=Depends(get_current_user)):
 
     return response.data
 
+
+
+
+@router.get("/contracts/{contract_id}/verify")
+async def verify_contract(contract_id: str, user=Depends(get_current_user)):
+
+    # 1️⃣ Fetch contract
+    contract = supabase.table("contracts") \
+        .select("*") \
+        .eq("id", contract_id) \
+        .single() \
+        .execute()
+
+    if not contract.data:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    stored_hash = contract.data["pdf_hash"]
+    file_path = contract.data["file_path"]
+
+    # 2️⃣ Download PDF from Supabase storage
+    file_response = supabase.storage.from_("contracts").download(file_path)
+
+    if not file_response:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_bytes = file_response
+
+    # 3️⃣ Recompute SHA256
+    recomputed_hash = hashlib.sha256(file_bytes).hexdigest()
+
+    hash_valid = (recomputed_hash == stored_hash)
+
+    # 4️⃣ Fetch signatures
+    signatures = supabase.table("signatures") \
+        .select("*") \
+        .eq("contract_id", contract_id) \
+        .execute()
+
+    signature_results = []
+
+    all_valid = True
+
+    for sig in signatures.data:
+
+        signer_id = sig["signer_id"]
+        signature_value = bytes.fromhex(sig["signature_value"])
+        signed_hash = sig["signed_hash"]
+
+        # Load public key
+        key_record = supabase.table("user_keys") \
+            .select("public_key") \
+            .eq("user_id", signer_id) \
+            .single() \
+            .execute()
+
+        if not key_record.data:
+            signature_results.append({
+                "signer_id": signer_id,
+                "valid": False,
+                "reason": "Public key not found"
+            })
+            all_valid = False
+            continue
+
+        public_key = serialization.load_pem_public_key(
+            key_record.data["public_key"].encode()
+        )
+
+        try:
+            public_key.verify(
+                signature_value,
+                signed_hash.encode(),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+
+            signature_results.append({
+                "signer_id": signer_id,
+                "valid": True
+            })
+
+        except InvalidSignature:
+            signature_results.append({
+                "signer_id": signer_id,
+                "valid": False,
+                "reason": "Signature mismatch"
+            })
+            all_valid = False
+
+    return {
+        "hash_valid": hash_valid,
+        "signature_count": len(signatures.data),
+        "all_signatures_valid": all_valid,
+        "signatures": signature_results
+    }
