@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { signContract, rejectContract } from "../api/backend/signing.api";
 import { supabase } from "../api/supabaseClient";
 import { getMyContracts } from "../api/backend/contracts.api";
 import { getAssignedContracts } from "../api/backend/assigned.api";
@@ -61,19 +62,21 @@ export default function Contracts() {
             <p>No contracts to sign.</p>
         ) : (
             assignedContracts.map((item) => (
-                <ContractCard
-                    key={item.contracts_with_creator.id}
-                    contract={item.contracts_with_creator}
-                    creatorEmail={item.contracts_with_creator.owner_email}
-                    status={item.status}
-                    onView={() =>
-                        setSelectedContract({
-                            ...item.contracts_with_creator,
-                            my_status: item.status,
-                        })
-                    }
-                />
-            ))
+    <ContractCard
+        key={item.id}
+        contract={item.contracts_with_creator}
+        creatorEmail={item.contracts_with_creator.owner_email}
+        status={item.status}
+        signeeId={item.id}
+        onView={() =>
+            setSelectedContract({
+                ...item.contracts_with_creator,
+                my_status: item.status,
+                signee_id: item.id,
+            })
+        }
+    />
+))
         );
 
     return (
@@ -112,11 +115,20 @@ export default function Contracts() {
             </div>
 
             {selectedContract && (
-                <ContractModal
-                    contract={selectedContract}
-                    onClose={() => setSelectedContract(null)}
-                />
-            )}
+    <ContractModal
+        contract={selectedContract}
+        onClose={() => setSelectedContract(null)}
+        onStatusUpdate={(signeeId, newStatus) => {
+            setAssignedContracts((prev) =>
+                prev.map((item) =>
+                    item.id === signeeId
+                        ? { ...item, status: newStatus }
+                        : item
+                )
+            );
+        }}
+    />
+)}
         </div>
     );
 }
@@ -162,8 +174,70 @@ function ContractCard({ contract, creatorEmail, signees, status, onView }) {
     );
 }
 
-function ContractModal({ contract, onClose }) {
-    const signees = contract.contract_signees || [];
+function ContractModal({ contract, onClose, onStatusUpdate }) {
+    const [loading, setLoading] = useState(false);
+    const [showPasswordSection, setShowPasswordSection] = useState(false);
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+
+    const handleConfirmSign = async () => {
+        if (!password) {
+            setError("Password is required.");
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError("");
+
+            const { data: { user } } =
+                await supabase.auth.getUser();
+
+            const email = user.email;
+
+            // Re-authenticate
+            const { error: authError } =
+                await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+
+            if (authError) {
+                setError("Incorrect password.");
+                return;
+            }
+
+            const { data: { session } } =
+                await supabase.auth.getSession();
+
+            await signContract(contract.signee_id, session.access_token);
+            onStatusUpdate(contract.signee_id, "signed");
+
+            onClose();
+            
+
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleReject = async () => {
+        try {
+            setLoading(true);
+
+            const { data: { session } } =
+                await supabase.auth.getSession();
+
+            onStatusUpdate(contract.signee_id, "signed");
+
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
@@ -171,75 +245,98 @@ function ContractModal({ contract, onClose }) {
 
                 <button
                     onClick={onClose}
-                    className="absolute top-3 right-3 text-gray-600 hover:text-black"
+                    className="absolute top-3 right-3 text-gray-600"
                 >
                     ✕
                 </button>
 
-                <h2 className="text-2xl font-bold mb-2">
-                    {contract.title}
-                </h2>
-
-                <div className="text-sm text-gray-600 mb-6">
-                    <p>
-                        Created by:{" "}
-                        <span className="font-medium">
-                            {contract.owner_email}
-                        </span>
-                    </p>
-                    <p>
-                        Created on:{" "}
-                        {new Date(contract.created_at).toLocaleDateString()}
-                    </p>
-                </div>
-
-                {/* Signees */}
-                {signees.length > 0 && (
+                {!showPasswordSection ? (
                     <>
-                        <h3 className="text-lg font-semibold mb-3">
-                            Signees
+                        <h2 className="text-2xl font-bold mb-2">
+                            {contract.title}
+                        </h2>
+
+                        <p className="text-sm text-gray-600 mb-6">
+                            Created by: {contract.owner_email}
+                        </p>
+
+                        <div className="border p-6 text-center text-gray-400 rounded mb-6">
+                            PDF Viewer Coming Next
+                        </div>
+
+                        {contract.my_status === "pending" && (
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() =>
+                                        setShowPasswordSection(true)
+                                    }
+                                    disabled={loading}
+                                    className="bg-green-600 text-white px-4 py-2 rounded"
+                                >
+                                    Sign Contract
+                                </button>
+
+                                <button
+                                    onClick={handleReject}
+                                    disabled={loading}
+                                    className="bg-red-600 text-white px-4 py-2 rounded"
+                                >
+                                    Reject
+                                </button>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <h3 className="text-xl font-semibold mb-4">
+                            Confirm Signing
                         </h3>
 
-                        <div className="border rounded mb-6">
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-100">
-                                    <tr>
-                                        <th className="p-2 text-left">Email</th>
-                                        <th className="p-2 text-left">Status</th>
-                                        <th className="p-2 text-left">Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {signees.map((signee) => (
-                                        <tr key={signee.id} className="border-t">
-                                            <td className="p-2">
-                                                {signee.email}
-                                            </td>
-                                            <td className="p-2">
-                                                {signee.status}
-                                            </td>
-                                            <td className="p-2">
-                                                {signee.signed_at
-                                                    ? new Date(signee.signed_at).toLocaleDateString()
-                                                    : signee.rejected_at
-                                                    ? new Date(signee.rejected_at).toLocaleDateString()
-                                                    : "-"}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <p className="text-sm text-gray-600 mb-4">
+                            You are about to sign:
+                            <span className="font-medium ml-1">
+                                {contract.title}
+                            </span>
+                        </p>
+
+                        {error && (
+                            <p className="text-red-600 text-sm mb-3">
+                                {error}
+                            </p>
+                        )}
+
+                        <input
+                            type="password"
+                            placeholder="Enter your password"
+                            className="w-full border p-2 rounded mb-4"
+                            value={password}
+                            onChange={(e) =>
+                                setPassword(e.target.value)
+                            }
+                        />
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowPasswordSection(false);
+                                    setPassword("");
+                                    setError("");
+                                }}
+                                className="px-4 py-2 bg-gray-200 rounded"
+                            >
+                                Back
+                            </button>
+
+                            <button
+                                onClick={handleConfirmSign}
+                                disabled={loading}
+                                className="px-4 py-2 bg-green-600 text-white rounded"
+                            >
+                                Confirm & Sign
+                            </button>
                         </div>
                     </>
                 )}
-
-                <h3 className="text-lg font-semibold mb-3">
-                    Contract Document
-                </h3>
-
-                <div className="border p-6 text-center text-gray-400 rounded">
-                    PDF Viewer Coming Next
-                </div>
             </div>
         </div>
     );

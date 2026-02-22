@@ -136,6 +136,56 @@ async def get_my_contracts(user=Depends(get_current_user)):
     return response.data
 
 
+#sign in contract modal
+@router.post("/contracts/{signee_id}/sign")
+async def sign_contract(signee_id: str, user=Depends(get_current_user)):
+
+    # Ensure this signee belongs to logged in user
+    signee = supabase.table("contract_signees") \
+        .select("*") \
+        .eq("id", signee_id) \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+
+    if not signee.data:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    supabase.table("contract_signees") \
+        .update({
+            "status": "signed",
+            "signed_at": "now()"
+        }) \
+        .eq("id", signee_id) \
+        .execute()
+
+    return {"message": "Contract signed"}
+
+
+#reject contract inside contract modal
+@router.post("/contracts/{signee_id}/reject")
+async def reject_contract(signee_id: str, user=Depends(get_current_user)):
+
+    signee = supabase.table("contract_signees") \
+        .select("*") \
+        .eq("id", signee_id) \
+        .eq("user_id", user.id) \
+        .single() \
+        .execute()
+
+    if not signee.data:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    supabase.table("contract_signees") \
+        .update({
+            "status": "rejected",
+            "rejected_at": "now()"
+        }) \
+        .eq("id", signee_id) \
+        .execute()
+
+    return {"message": "Contract rejected"}
+
 #sign contract
 @router.post("/sign/{token}")
 async def sign_contract(token: str, user=Depends(get_current_user)):
