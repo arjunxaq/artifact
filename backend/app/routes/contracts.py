@@ -623,3 +623,46 @@ async def verify_contract(contract_id: str, user=Depends(get_current_user)):
         "all_signatures_valid": all_valid,
         "signatures": signature_results
     }
+
+
+@router.get("/dashboard")
+async def get_dashboard(user=Depends(get_current_user)):
+
+    # Managed contracts count
+    managed = supabase.table("contracts") \
+        .select("id", count="exact") \
+        .eq("owner_id", user.id) \
+        .execute()
+
+    managed_count = managed.count or 0
+
+    # Assigned contracts count
+    assigned = supabase.table("contract_signees") \
+        .select("id", count="exact") \
+        .eq("email", user.email) \
+        .execute()
+
+    assigned_count = assigned.count or 0
+
+    # Pending to sign
+    pending = supabase.table("contract_signees") \
+        .select("""
+            id,
+            status,
+            contracts_with_creator (
+                id,
+                title,
+                created_at,
+                owner_email
+            )
+        """) \
+        .eq("email", user.email) \
+        .eq("status", "pending") \
+        .execute()
+
+    return {
+        "managed_count": managed_count,
+        "assigned_count": assigned_count,
+        "pending_contracts": pending.data
+    }
+

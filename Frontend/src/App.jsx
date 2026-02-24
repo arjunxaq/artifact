@@ -4,7 +4,6 @@ import Signup from "./pages/Signup";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Contracts from "./pages/Contracts";
-
 import CreateContract from "./pages/CreateContract";
 import { useAuth } from "./context/AuthContext";
 
@@ -33,7 +32,8 @@ function App() {
           path="/"
           element={user ? <DashboardLayout /> : <Navigate to="/login" />}
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<Navigate to="dashboard" />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="contracts" element={<Contracts />} />
           <Route path="create" element={<CreateContract />} />
         </Route>

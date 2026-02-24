@@ -19,7 +19,7 @@ export default function DashboardLayout() {
                 </div>
 
                 <nav className="flex-1 px-2 space-y-1">
-                    <NavLink to="/" end className={linkClass}>
+                    <NavLink to="/dashboard" end className={linkClass}>
                         Dashboard
                     </NavLink>
                     <NavLink to="/contracts" className={linkClass}>
