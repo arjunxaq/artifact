@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { signContract, rejectContract } from "../api/backend/signing.api";
 import { supabase } from "../api/supabaseClient";
 import { getMyContracts } from "../api/backend/contracts.api";
 import { getAssignedContracts } from "../api/backend/assigned.api";
+import { signContract, rejectContract } from "../api/backend/signing.api";
 
 export default function Contracts() {
     const { user } = useAuth();
@@ -11,8 +11,9 @@ export default function Contracts() {
     const [activeTab, setActiveTab] = useState("managed");
     const [managedContracts, setManagedContracts] = useState([]);
     const [assignedContracts, setAssignedContracts] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [selectedContract, setSelectedContract] = useState(null);
+    const [selectedSignees, setSelectedSignees] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -39,51 +40,40 @@ export default function Contracts() {
         if (user) loadData();
     }, [user]);
 
-    if (loading) return <p>Loading contracts...</p>;
+    if (loading) return <p>Loading...</p>;
     if (error) return <p className="text-red-600">{error}</p>;
 
-    const renderManaged = () =>
-        managedContracts.length === 0 ? (
-            <p>No managed contracts.</p>
-        ) : (
-            managedContracts.map((contract) => (
-                <ContractCard
-                    key={contract.id}
-                    contract={contract}
-                    creatorEmail={contract.owner_email}
-                    signees={contract.contract_signees}
-                    onView={() => setSelectedContract(contract)}
-                />
-            ))
+    const handleAssignedView = async (item) => {
+        const { data: { session } } =
+            await supabase.auth.getSession();
+
+        const token = session?.access_token;
+
+        const res = await fetch(
+            `http://localhost:8000/api/contracts/${item.contracts_with_creator.id}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
         );
 
-    const renderAssigned = () =>
-        assignedContracts.length === 0 ? (
-            <p>No contracts to sign.</p>
-        ) : (
-            assignedContracts.map((item) => (
-    <ContractCard
-        key={item.id}
-        contract={item.contracts_with_creator}
-        creatorEmail={item.contracts_with_creator.owner_email}
-        status={item.status}
-        signeeId={item.id}
-        onView={() =>
-            setSelectedContract({
-                ...item.contracts_with_creator,
-                my_status: item.status,
-                signee_id: item.id,
-            })
-        }
-    />
-))
-        );
+        const data = await res.json();
+
+        setSelectedContract({
+            ...data.contract,
+            signee_id: item.id,
+            my_status: item.status,
+            current_user_id: session.user.id
+        });
+
+        setSelectedSignees(data.signees);
+    };
 
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-6">Contracts</h1>
 
-            {/* Tabs */}
             <div className="flex gap-4 mb-6">
                 <button
                     onClick={() => setActiveTab("managed")}
@@ -108,32 +98,54 @@ export default function Contracts() {
                 </button>
             </div>
 
-            <div className="space-y-4">
-                {activeTab === "managed"
-                    ? renderManaged()
-                    : renderAssigned()}
-            </div>
+            {activeTab === "managed" &&
+                managedContracts.map((contract) => (
+                    <ContractCard
+                        key={contract.id}
+                        contract={contract}
+                        onView={() => {
+                            setSelectedContract(contract);
+                            setSelectedSignees(contract.contract_signees || []);
+                        }}
+                    />
+                ))
+            }
+
+            {activeTab === "assigned" &&
+                assignedContracts.map((item) => (
+                    <ContractCard
+                        key={item.id}
+                        contract={item.contracts_with_creator}
+                        status={item.status}
+                        onView={() => handleAssignedView(item)}
+                    />
+                ))
+            }
 
             {selectedContract && (
-    <ContractModal
-        contract={selectedContract}
-        onClose={() => setSelectedContract(null)}
-        onStatusUpdate={(signeeId, newStatus) => {
-            setAssignedContracts((prev) =>
-                prev.map((item) =>
-                    item.id === signeeId
-                        ? { ...item, status: newStatus }
-                        : item
-                )
-            );
-        }}
-    />
-)}
+                <ContractModal
+                    contract={selectedContract}
+                    signees={selectedSignees}
+                    onClose={() => {
+                        setSelectedContract(null);
+                        setSelectedSignees([]);
+                    }}
+                    onStatusUpdate={(signeeId, newStatus) => {
+                        setAssignedContracts((prev) =>
+                            prev.map((item) =>
+                                item.id === signeeId
+                                    ? { ...item, status: newStatus }
+                                    : item
+                            )
+                        );
+                    }}
+                />
+            )}
         </div>
     );
 }
 
-function ContractCard({ contract, creatorEmail, signees, status, onView }) {
+function ContractCard({ contract, status, onView }) {
     return (
         <div className="bg-white p-4 rounded shadow flex justify-between items-center">
             <div>
@@ -142,24 +154,12 @@ function ContractCard({ contract, creatorEmail, signees, status, onView }) {
                 </h2>
 
                 <p className="text-sm text-gray-500">
-                    Created on{" "}
                     {new Date(contract.created_at).toLocaleDateString()}
                 </p>
 
-                <p className="text-sm text-gray-600">
-                    Creator: {creatorEmail}
-                </p>
-
-                {signees && (
-                    <p className="text-sm text-gray-600">
-                        {signees.length} signee(s)
-                    </p>
-                )}
-
                 {status && (
                     <p className="text-sm mt-1">
-                        Your Status:{" "}
-                        <span className="font-medium">{status}</span>
+                        Your Status: {status}
                     </p>
                 )}
             </div>
@@ -174,11 +174,27 @@ function ContractCard({ contract, creatorEmail, signees, status, onView }) {
     );
 }
 
-function ContractModal({ contract, onClose, onStatusUpdate }) {
+function ContractModal({
+    contract,
+    signees,
+    onClose,
+    onStatusUpdate
+}) {
     const [loading, setLoading] = useState(false);
     const [showPasswordSection, setShowPasswordSection] = useState(false);
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+
+    const isOwner =
+        contract.owner_id === contract.current_user_id;
+
+    const isSignee = !!contract.signee_id;
+
+    const getToken = async () => {
+        const { data: { session } } =
+            await supabase.auth.getSession();
+        return session?.access_token;
+    };
 
     const handleConfirmSign = async () => {
         if (!password) {
@@ -193,12 +209,9 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
             const { data: { user } } =
                 await supabase.auth.getUser();
 
-            const email = user.email;
-
-            // Re-authenticate
             const { error: authError } =
                 await supabase.auth.signInWithPassword({
-                    email,
+                    email: user.email,
                     password,
                 });
 
@@ -207,14 +220,11 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
                 return;
             }
 
-            const { data: { session } } =
-                await supabase.auth.getSession();
+            const token = await getToken();
+            await signContract(contract.signee_id, token);
 
-            await signContract(contract.signee_id, session.access_token);
             onStatusUpdate(contract.signee_id, "signed");
-
             onClose();
-            
 
         } catch (err) {
             setError(err.message);
@@ -226,17 +236,44 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
     const handleReject = async () => {
         try {
             setLoading(true);
+            const token = await getToken();
 
-            const { data: { session } } =
-                await supabase.auth.getSession();
+            await rejectContract(contract.signee_id, token);
 
-            onStatusUpdate(contract.signee_id, "signed");
+            onStatusUpdate(contract.signee_id, "rejected");
+            onClose();
 
         } catch (err) {
             alert(err.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDownload = async () => {
+        const token = await getToken();
+
+        const res = await fetch(
+            `http://localhost:8000/api/contracts/${contract.id}/download`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            }
+        );
+
+        if (!res.ok) {
+            alert("Download failed.");
+            return;
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "contract.pdf";
+        a.click();
     };
 
     return (
@@ -250,57 +287,72 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
                     ✕
                 </button>
 
-                {!showPasswordSection ? (
-                    <>
-                        <h2 className="text-2xl font-bold mb-2">
-                            {contract.title}
-                        </h2>
+                <h2 className="text-2xl font-bold mb-2">
+                    {contract.title}
+                </h2>
 
-                        <p className="text-sm text-gray-600 mb-6">
-                            Created by: {contract.owner_email}
-                        </p>
+                <p className="mb-4">
+                    Status:
+                    <span className={`ml-2 font-semibold ${
+                        contract.status === "SIGNED"
+                            ? "text-green-600"
+                            : contract.status === "REJECTED"
+                            ? "text-red-600"
+                            : "text-yellow-600"
+                    }`}>
+                        {contract.status}
+                    </span>
+                </p>
 
-                        <div className="border p-6 text-center text-gray-400 rounded mb-6">
-                            PDF Viewer Coming Next
+                <button
+                    onClick={handleDownload}
+                    className="bg-gray-700 text-white px-4 py-2 rounded mb-6"
+                >
+                    Download PDF
+                </button>
+
+                <h3 className="text-lg font-semibold mb-3">
+                    Signees
+                </h3>
+
+                <div className="space-y-3 mb-6">
+                    {signees.map((s) => (
+                        <div
+                            key={s.id}
+                            className="border p-3 rounded"
+                        >
+                            <div>Email: {s.email}</div>
+                            <div>Status: {s.status}</div>
                         </div>
+                    ))}
+                </div>
 
-                        {contract.my_status === "pending" && (
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={() =>
-                                        setShowPasswordSection(true)
-                                    }
-                                    disabled={loading}
-                                    className="bg-green-600 text-white px-4 py-2 rounded"
-                                >
-                                    Sign Contract
-                                </button>
+                {isSignee &&
+                 contract.my_status === "pending" &&
+                 !showPasswordSection && (
+                    <div className="flex gap-4">
+                        <button
+                            onClick={() =>
+                                setShowPasswordSection(true)
+                            }
+                            className="bg-green-600 text-white px-4 py-2 rounded"
+                        >
+                            Sign
+                        </button>
 
-                                <button
-                                    onClick={handleReject}
-                                    disabled={loading}
-                                    className="bg-red-600 text-white px-4 py-2 rounded"
-                                >
-                                    Reject
-                                </button>
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        <h3 className="text-xl font-semibold mb-4">
-                            Confirm Signing
-                        </h3>
+                        <button
+                            onClick={handleReject}
+                            className="bg-red-600 text-white px-4 py-2 rounded"
+                        >
+                            Reject
+                        </button>
+                    </div>
+                )}
 
-                        <p className="text-sm text-gray-600 mb-4">
-                            You are about to sign:
-                            <span className="font-medium ml-1">
-                                {contract.title}
-                            </span>
-                        </p>
-
+                {showPasswordSection && (
+                    <div className="mt-6">
                         {error && (
-                            <p className="text-red-600 text-sm mb-3">
+                            <p className="text-red-600 mb-3">
                                 {error}
                             </p>
                         )}
@@ -324,7 +376,7 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
                                 }}
                                 className="px-4 py-2 bg-gray-200 rounded"
                             >
-                                Back
+                                Cancel
                             </button>
 
                             <button
@@ -335,7 +387,7 @@ function ContractModal({ contract, onClose, onStatusUpdate }) {
                                 Confirm & Sign
                             </button>
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </div>
