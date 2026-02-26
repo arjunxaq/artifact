@@ -9,8 +9,12 @@ import {
     Clock,
     ArrowUpRight,
     ChevronRight,
-    Plus
+    Plus,
+    Bell,
+    BellOff,
+    X
 } from "lucide-react";
+import { deleteNotification } from "../api/backend/notifications.api";
 
 export default function Dashboard() {
     const { session } = useAuth();
@@ -139,22 +143,51 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Quick Actions */}
+                {/* Notifications Panel */}
                 <div className="space-y-6">
-                    <h2 className="text-xl font-semibold tracking-tight">Quick Actions</h2>
+                    <h2 className="text-xl font-semibold tracking-tight">Latest Notifications</h2>
                     <div className="space-y-4">
-                        <ActionCard
-                            title="Bulk Verify"
-                            description="Verify integrity of all signed docs"
-                            icon={FileText}
-                            onClick={() => navigate("/contracts")}
-                        />
-                        <ActionCard
-                            title="Initialize Keys"
-                            description="Set up your cryptograhic keys"
-                            icon={Users}
-                            onClick={() => navigate("/contracts")}
-                        />
+                        {!stats.notifications || stats.notifications.length === 0 ? (
+                            <div className="glass-card rounded-2xl p-8 text-center border-dashed border-zinc-800">
+                                <BellOff className="w-8 h-8 text-zinc-700 mx-auto mb-3" />
+                                <p className="text-sm text-zinc-500 font-medium">Clear for now!</p>
+                            </div>
+                        ) : (
+                            stats.notifications.map((notif) => (
+                                <div
+                                    key={notif.id}
+                                    className="glass-card rounded-2xl p-4 flex items-start gap-4 group relative"
+                                >
+                                    <div className="p-2 rounded-xl bg-indigo-600/10 text-indigo-400">
+                                        <Bell className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1 pr-8">
+                                        <p className="text-sm font-medium leading-relaxed">{notif.message}</p>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-2">
+                                            {new Date(notif.created_at).toLocaleDateString()} • {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                                await deleteNotification(notif.id, session.access_token);
+                                                setStats(prev => ({
+                                                    ...prev,
+                                                    notifications: prev.notifications.filter(n => n.id !== notif.id)
+                                                }));
+                                            } catch (err) {
+                                                console.error("Failed to delete notification:", err);
+                                            }
+                                        }}
+                                        className="absolute right-3 top-3 p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                                        title="Dismiss"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
             </div>

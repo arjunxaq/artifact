@@ -435,6 +435,16 @@ async def sign_contract(signee_id: str, user=Depends(get_current_user)):
             .update({"status": "SIGNED"}) \
             .eq("id", contract_id) \
             .execute()
+        
+        # Create notification for creator
+        try:
+            supabase.table("notifications").insert({
+                "user_id": contract.data["owner_id"],
+                "contract_id": contract_id,
+                "message": f"Contract '{contract.data['title']}' has been fully signed."
+            }).execute()
+        except Exception as e:
+            print(f"DEBUG: Failed to create notification (table might be missing): {e}")
     else:
         supabase.table("contracts") \
             .update({"status": "PARTIALLY_SIGNED"}) \
@@ -724,6 +734,27 @@ async def verify_contract(contract_id: str, user=Depends(get_current_user)):
         "signatures": signature_results
     }
 
+@router.get("/notifications")
+async def get_notifications(user=Depends(get_current_user)):
+    try:
+        response = supabase.table("notifications") \
+            .select("*") \
+            .eq("user_id", user.id) \
+            .order("created_at", desc=True) \
+            .execute()
+        return response.data
+    except Exception as e:
+        print(f"DEBUG: Failed to fetch notifications: {e}")
+        return []
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, user=Depends(get_current_user)):
+    supabase.table("notifications") \
+        .delete() \
+        .eq("id", notification_id) \
+        .eq("user_id", user.id) \
+        .execute()
+    return {"message": "Notification deleted"}
 
 @router.get("/dashboard")
 async def get_dashboard(user=Depends(get_current_user)):
@@ -766,9 +797,22 @@ async def get_dashboard(user=Depends(get_current_user)):
         if item.get("contracts_with_creator"):
             item["contracts_with_creator"]["status"] = check_contract_expiry(item["contracts_with_creator"])
 
+    # Notifications
+    notifications_data = []
+    try:
+        notifications = supabase.table("notifications") \
+            .select("*") \
+            .eq("user_id", user.id) \
+            .order("created_at", desc=True) \
+            .execute()
+        notifications_data = notifications.data
+    except Exception as e:
+        print(f"DEBUG: Failed to fetch notifications for dashboard: {e}")
+
     return {
         "managed_count": managed_count,
         "assigned_count": assigned_count,
-        "pending_contracts": pending.data
+        "pending_contracts": pending.data,
+        "notifications": notifications_data
     }
 
