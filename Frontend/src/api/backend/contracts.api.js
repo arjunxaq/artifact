@@ -33,6 +33,14 @@ export async function createContract(token, data) {
         formData.append("file", data.file);
     }
 
+    if (data.signingDeadline) {
+        formData.append("signing_deadline", data.signingDeadline);
+    }
+
+    if (data.expiryDate) {
+        formData.append("expiry_date", data.expiryDate);
+    }
+
     const response = await fetch(`${API_BASE}/contracts`, {
         method: "POST",
         headers: {

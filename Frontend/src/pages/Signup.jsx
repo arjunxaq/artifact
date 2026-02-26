@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
+import { Mail, Lock, FileText, ArrowRight, Loader2, UserPlus } from "lucide-react";
 
 export default function Signup() {
     const { signup } = useAuth();
@@ -18,55 +19,102 @@ export default function Signup() {
 
         if (error) {
             setError(error.message);
+            setLoading(false);
         }
-
-        setLoading(false);
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-100">
-            <form
-                onSubmit={handleSubmit}
-                className="w-full max-w-md bg-white p-8 rounded-lg shadow"
-            >
-                <h1 className="text-2xl font-bold mb-6">Sign Up</h1>
+        <div className="min-h-screen flex items-center justify-center bg-[#09090b] p-6 relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-violet-600/10 blur-[130px] rounded-full"></div>
 
-                {error && (
-                    <p className="mb-4 text-red-600 text-sm">{error}</p>
-                )}
+            <div className="w-full max-w-md animate-fade-in relative z-10">
+                <div className="flex flex-col items-center mb-10">
+                    <div className="w-16 h-16 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-indigo-600/20 mb-6 group hover:scale-110 transition-transform duration-500">
+                        <FileText className="text-black w-8 h-8" />
+                    </div>
+                    <h1 className="text-4xl font-bold tracking-tight mb-2 italic">Join Artifact</h1>
+                    <p className="text-zinc-500 font-medium text-center px-4">Initialize your cryptographic identity and start signing.</p>
+                </div>
 
-                <input
-                    type="email"
-                    placeholder="Email"
-                    className="w-full mb-4 p-3 border rounded"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                />
-
-                <input
-                    type="password"
-                    placeholder="Password"
-                    className="w-full mb-6 p-3 border rounded"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                />
-
-                <button
-                    disabled={loading}
-                    className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+                <form
+                    onSubmit={handleSubmit}
+                    className="glass-card p-10 rounded-[3rem] border border-zinc-800/50 shadow-2xl space-y-6"
                 >
-                    {loading ? "Creating account..." : "Sign Up"}
-                </button>
+                    <div className="space-y-1 text-center">
+                        <h2 className="text-xl font-bold">Initialize Vault</h2>
+                        <p className="text-sm text-zinc-500">Create your secure access point below.</p>
+                    </div>
 
-                <p className="mt-4 text-sm">
-                    Already have an account?{" "}
-                    <Link to="/login" className="text-indigo-600">
-                        Login
-                    </Link>
-                </p>
-            </form>
+                    {error && (
+                        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl text-sm font-medium animate-in fade-in zoom-in-95">
+                            {error}
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">Preferred Email</label>
+                            <div className="relative group">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-600 group-focus-within:text-violet-400 transition-colors" />
+                                <input
+                                    type="email"
+                                    placeholder="name@company.com"
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-5 py-4 focus:ring-2 focus:ring-violet-600/20 focus:border-violet-600/50 outline-none transition-all"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">Secure Password</label>
+                            <div className="relative group">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-600 group-focus-within:text-violet-400 transition-colors" />
+                                <input
+                                    type="password"
+                                    placeholder="Create a strong password"
+                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-5 py-4 focus:ring-2 focus:ring-violet-600/20 focus:border-violet-600/50 outline-none transition-all"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        disabled={loading}
+                        className="w-full bg-white hover:bg-zinc-200 text-black h-14 rounded-2xl relative group overflow-hidden transition-all shadow-xl shadow-white/5 active:scale-[0.98]"
+                    >
+                        <div className="relative z-10 flex items-center justify-center gap-2">
+                            {loading ? (
+                                <Loader2 className="w-5 h-5 animate-spin text-black" />
+                            ) : (
+                                <>
+                                    <UserPlus className="w-5 h-5" />
+                                    <span className="font-bold">Create Vault</span>
+                                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
+                        </div>
+                    </button>
+
+                    <p className="text-center text-sm text-zinc-500 pt-2">
+                        Already have an account?{" "}
+                        <Link to="/login" className="text-white hover:text-violet-400 font-bold transition-all underline decoration-zinc-800 underline-offset-4">
+                            Enter Vault
+                        </Link>
+                    </p>
+                </form>
+
+                <div className="mt-8 text-center max-w-xs mx-auto">
+                    <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em] leading-relaxed">
+                        By initializing, you agree to the cryptographic terms of service.
+                    </p>
+                </div>
+            </div>
         </div>
     );
 }

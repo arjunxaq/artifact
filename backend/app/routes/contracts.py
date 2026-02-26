@@ -7,7 +7,8 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from app.services.key_service import decrypt_private_key
 from app.services.template_service import render_template_to_pdf
 from app.services.key_service import generate_rsa_key_pair
-from typing import List
+from typing import List, Optional
+from datetime import datetime, timezone
 import time
 import os
 import uuid
@@ -19,6 +20,77 @@ import tempfile
 
 
 router = APIRouter()
+
+def check_contract_expiry(contract: dict):
+    """
+    Checks if a contract has exceeded its signing deadline or expiry date.
+    Updates the status in the database if necessary.
+    """
+    try:
+        if not contract or contract.get("status") == "EXPIRED":
+            return contract.get("status") if contract else "EXPIRED"
+
+        now = datetime.now(timezone.utc)
+        
+        # Check signing deadline (only if not yet signed)
+        signing_deadline = contract.get("signing_deadline")
+        if signing_deadline and contract.get("status") in ["PENDING", "PARTIALLY_SIGNED"]:
+            # Handle potential 'Z' or '+00:00' or other offsets
+            ds = signing_deadline.replace('Z', '+00:00')
+            deadline = datetime.fromisoformat(ds)
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            
+            if now > deadline:
+                supabase.table("contracts").update({"status": "EXPIRED"}).eq("id", contract["id"]).execute()
+                return "EXPIRED"
+
+        # Check contract expiry date
+        expiry_date = contract.get("expiry_date")
+        if expiry_date:
+            ds = expiry_date.replace('Z', '+00:00')
+            expiry = datetime.fromisoformat(ds)
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+                
+            if now > expiry:
+                supabase.table("contracts").update({"status": "EXPIRED"}).eq("id", contract["id"]).execute()
+                return "EXPIRED"
+
+        return contract.get("status")
+    except Exception as e:
+        print(f"ERROR in check_contract_expiry: {e}")
+        import traceback
+        traceback.print_exc()
+        return contract.get("status") if contract else "ERROR"
+
+def sweep_expired_contracts():
+    """
+    Finds all PENDING or PARTIALLY_SIGNED contracts that have passed their deadline
+    and updates them to EXPIRED.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Expire based on signing deadline
+    supabase.table("contracts") \
+        .update({"status": "EXPIRED"}) \
+        .in_("status", ["PENDING", "PARTIALLY_SIGNED"]) \
+        .lt("signing_deadline", now) \
+        .execute()
+
+    # Expire based on expiry date
+    supabase.table("contracts") \
+        .update({"status": "EXPIRED"}) \
+        .lt("expiry_date", now) \
+        .neq("status", "EXPIRED") \
+        .execute()
+
+@router.post("/contracts/sweep")
+async def trigger_sweep(user=Depends(get_current_user)):
+    sweep_expired_contracts()
+    return {"message": "Sweep completed"}
+
+
 
 @router.post("/contracts/link")
 async def link_contracts(user=Depends(get_current_user)):
@@ -106,11 +178,17 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
                 id,
                 title,
                 created_at,
-                owner_email
+                owner_email,
+                signing_deadline,
+                expiry_date
             )
         """) \
         .eq("user_id", user.id) \
         .execute()
+
+    for item in response.data:
+        if item.get("contracts_with_creator"):
+            item["contracts_with_creator"]["status"] = check_contract_expiry(item["contracts_with_creator"])
 
     return response.data
 
@@ -127,7 +205,9 @@ async def get_contract_details(contract_id: str, user=Depends(get_current_user))
             created_at,
             owner_id,
             owner_email,
-            status
+            status,
+            signing_deadline,
+            expiry_date
         """) \
         .eq("id", contract_id) \
         .single() \
@@ -135,6 +215,9 @@ async def get_contract_details(contract_id: str, user=Depends(get_current_user))
 
     if not contract.data:
         raise HTTPException(status_code=404, detail="Contract not found")
+
+    # Check expiry
+    contract.data["status"] = check_contract_expiry(contract.data)
 
     # Fetch signees
     signees = supabase.table("contract_signees") \
@@ -194,6 +277,8 @@ async def get_my_contracts(user=Depends(get_current_user)):
             owner_id,
             owner_email,
             status,
+            signing_deadline,
+            expiry_date,
             contract_signees (
                 id,
                 email,
@@ -205,6 +290,9 @@ async def get_my_contracts(user=Depends(get_current_user)):
         .eq("owner_id", user.id) \
         .order("created_at", desc=True) \
         .execute()
+
+    for contract in response.data:
+        contract["status"] = check_contract_expiry(contract)
 
     return response.data
 
@@ -400,6 +488,8 @@ async def create_contract(
     template_id: str = Form(None),
     template_data: str = Form(None),
     file: UploadFile = File(None),
+    signing_deadline: Optional[str] = Form(None),
+    expiry_date: Optional[str] = Form(None),
     user=Depends(get_current_user),
 ):
 
@@ -471,7 +561,9 @@ async def create_contract(
         "template_id": template_id,
         "file_path": file_path,
         "pdf_hash": pdf_hash,
-        "status": "PENDING"
+        "status": "PENDING",
+        "signing_deadline": signing_deadline,
+        "expiry_date": expiry_date
     }).execute()
 
     contract_data = contract.data[0]
@@ -491,6 +583,14 @@ async def create_contract(
     ]
 
     supabase.table("contract_signees").insert(signee_rows).execute()
+
+    # -----------------------------
+    # NOTIFICATION (PLACEHOLDER)
+    # -----------------------------
+    print(f"DEBUG: Triggering notification for {len(email_list)} signees for contract {contract_data['id']}")
+    # Here you would typically call an email service (e.g. Resend)
+    # for email in email_list:
+    #     send_invite_email(email, contract_data['id'])
 
     return contract_data
 
@@ -653,12 +753,18 @@ async def get_dashboard(user=Depends(get_current_user)):
                 id,
                 title,
                 created_at,
-                owner_email
+                owner_email,
+                signing_deadline,
+                expiry_date
             )
         """) \
         .eq("email", user.email) \
         .eq("status", "pending") \
         .execute()
+
+    for item in pending.data:
+        if item.get("contracts_with_creator"):
+            item["contracts_with_creator"]["status"] = check_contract_expiry(item["contracts_with_creator"])
 
     return {
         "managed_count": managed_count,

@@ -9,6 +9,15 @@ async def get_current_user(authorization: str = Header(None)):
 
     try:
         user = supabase.auth.get_user(token)
-        return user.user
-    except Exception:
+        if hasattr(user, 'user') and user.user:
+            return user.user
+        
+        # If the library returns a response object with .data (v2 style)
+        if hasattr(user, 'data') and user.data:
+            return user.data
+            
+        print(f"DEBUG: Auth failed for token: {token[:15]}... Response: {user}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        print(f"DEBUG: Auth exception: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
