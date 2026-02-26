@@ -5,8 +5,7 @@ import {
     FileText,
     PlusCircle,
     LogOut,
-    User,
-    Bell
+    User
 } from "lucide-react";
 
 export default function DashboardLayout() {
@@ -26,7 +25,7 @@ export default function DashboardLayout() {
                     <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
                         <FileText className="text-white w-6 h-6" />
                     </div>
-                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+                    <span className="text-xl font-bold text-white">
                         Artifact
                     </span>
                 </div>
@@ -73,9 +72,6 @@ export default function DashboardLayout() {
                         Welcome back
                     </h2>
                     <div className="flex items-center gap-4">
-                        <button className="p-2.5 rounded-xl border border-zinc-800 hover:bg-zinc-800/50 text-zinc-400 transition-all">
-                            <Bell className="w-5 h-5" />
-                        </button>
                     </div>
                 </header>
 

@@ -139,7 +139,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* Quick Actions / Tips */}
+                {/* Quick Actions */}
                 <div className="space-y-6">
                     <h2 className="text-xl font-semibold tracking-tight">Quick Actions</h2>
                     <div className="space-y-4">
@@ -155,19 +155,6 @@ export default function Dashboard() {
                             icon={Users}
                             onClick={() => navigate("/contracts")}
                         />
-                    </div>
-
-                    <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-3xl p-6 text-white shadow-xl shadow-indigo-600/10 hidden lg:block">
-                        <h3 className="font-bold text-lg mb-2">Pro Tip</h3>
-                        <p className="text-indigo-100 text-sm leading-relaxed mb-4">
-                            Setting regular expiry dates helps keep your document workflow clean and reduces legal risks.
-                        </p>
-                        <button
-                            onClick={() => navigate("/create")}
-                            className="w-full py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-sm font-semibold transition-all"
-                        >
-                            Learn More
-                        </button>
                     </div>
                 </div>
             </div>
