@@ -34,7 +34,7 @@ export default function Signup() {
                         <FileText className="text-black w-8 h-8" />
                     </div>
                     <h1 className="text-4xl font-bold tracking-tight mb-2 italic">Join Artifact</h1>
-                    <p className="text-zinc-500 font-medium text-center px-4">Initialize your cryptographic identity and start signing.</p>
+                    <p className="text-zinc-500 font-medium text-center px-4">Create your account and start signing documents securely.</p>
                 </div>
 
                 <form
@@ -42,8 +42,8 @@ export default function Signup() {
                     className="glass-card p-10 rounded-[3rem] border border-zinc-800/50 shadow-2xl space-y-6"
                 >
                     <div className="space-y-1 text-center">
-                        <h2 className="text-xl font-bold">Initialize Vault</h2>
-                        <p className="text-sm text-zinc-500">Create your secure access point below.</p>
+                        <h2 className="text-xl font-bold">Create Account</h2>
+                        <p className="text-sm text-zinc-500">Fill in the details below to get started.</p>
                     </div>
 
                     {error && (
@@ -94,7 +94,7 @@ export default function Signup() {
                             ) : (
                                 <>
                                     <UserPlus className="w-5 h-5" />
-                                    <span className="font-bold">Create Vault</span>
+                                    <span className="font-bold">Get Started</span>
                                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </>
                             )}
@@ -104,14 +104,14 @@ export default function Signup() {
                     <p className="text-center text-sm text-zinc-500 pt-2">
                         Already have an account?{" "}
                         <Link to="/login" className="text-white hover:text-violet-400 font-bold transition-all underline decoration-zinc-800 underline-offset-4">
-                            Enter Vault
+                            Sign In
                         </Link>
                     </p>
                 </form>
 
                 <div className="mt-8 text-center max-w-xs mx-auto">
                     <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em] leading-relaxed">
-                        By initializing, you agree to the cryptographic terms of service.
+                        By signing up, you agree to our Terms of Service and Privacy Policy.
                     </p>
                 </div>
             </div>

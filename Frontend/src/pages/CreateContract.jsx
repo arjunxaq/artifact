@@ -15,7 +15,8 @@ import {
     Type,
     ArrowRight,
     Loader2,
-    X
+    X,
+    Clock
 } from "lucide-react";
 
 export default function CreateContract() {

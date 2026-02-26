@@ -34,7 +34,7 @@ export default function Login() {
                         <FileText className="text-white w-8 h-8" />
                     </div>
                     <h1 className="text-4xl font-bold tracking-tight mb-2 italic">Artifact</h1>
-                    <p className="text-zinc-500 font-medium">Secure cryptographic contract management</p>
+                    <p className="text-zinc-500 font-medium">Professional Document Management & Digital Signatures</p>
                 </div>
 
                 <form
@@ -43,7 +43,7 @@ export default function Login() {
                 >
                     <div className="space-y-1">
                         <h2 className="text-xl font-bold">Sign In</h2>
-                        <p className="text-sm text-zinc-500">Enter your credentials to access your vault.</p>
+                        <p className="text-sm text-zinc-500">Enter your credentials to access your account.</p>
                     </div>
 
                     {error && (
@@ -96,7 +96,7 @@ export default function Login() {
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 <>
-                                    <span className="font-bold">Enter Vault</span>
+                                    <span className="font-bold">Sign In</span>
                                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </>
                             )}
@@ -106,13 +106,13 @@ export default function Login() {
                     <p className="text-center text-sm text-zinc-500 pt-2">
                         Don’t have an account?{" "}
                         <Link to="/signup" className="text-white hover:text-indigo-400 font-bold transition-all underline decoration-zinc-800 underline-offset-4">
-                            Create Vault
+                            Create Account
                         </Link>
                     </p>
                 </form>
 
                 <div className="mt-8 text-center">
-                    <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em]">End-to-End Cryptography • Artifact v1.0</p>
+                    <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em]">Secure Digital Signatures • Artifact v1.0</p>
                 </div>
             </div>
         </div>
