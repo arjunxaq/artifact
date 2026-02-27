@@ -62,6 +62,10 @@ Goal: Simple, understandable contract tools
 
 This vision emphasizes simplicity, inclusivity, and trust, focusing on empowering users rather than overwhelming them with legal complexity.
 
+## Software Design
+
+Artifact is built on a modular architecture featuring a high-performance FastAPI/Python backend for secure contract management and a modern React/Vite frontend. The system prioritizes visual excellence and user-friendly interactions through a consistent design system powered by Tailwind CSS, all within a containerized Docker ecosystem for seamless deployment.
+
 ## Key Features / Goals
 Core Features:
 
