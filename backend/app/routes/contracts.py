@@ -17,6 +17,7 @@ import json
 from cryptography.hazmat.primitives import serialization
 from cryptography.exceptions import InvalidSignature
 import tempfile
+from app.services.redis_service import redis_client
 
 
 router = APIRouter()
@@ -144,6 +145,12 @@ async def resend_contract(contract_id: str, user=Depends(get_current_user)):
         .eq("contract_id", contract_id) \
         .execute()
 
+    if redis_client:
+        redis_client.delete(f"contracts:my:{user.id}")
+        all_signees = supabase.table("contract_signees").select("email").eq("contract_id", contract_id).execute()
+        for s in all_signees.data:
+            redis_client.delete(f"contracts:assigned:{s['email']}")
+
     return {"message": "Contract reset for resend"}
 
 
@@ -168,6 +175,12 @@ async def get_contract_file(contract_id: str, user=Depends(get_current_user)):
 @router.get("/contracts/assigned")
 async def get_assigned_contracts(user=Depends(get_current_user)):
     
+    cache_key = f"contracts:assigned:{user.email}"
+    if redis_client:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached) if isinstance(cached, str) else cached
+
     response = supabase.table("contract_signees") \
         .select("""
             id,
@@ -183,12 +196,15 @@ async def get_assigned_contracts(user=Depends(get_current_user)):
                 expiry_date
             )
         """) \
-        .eq("user_id", user.id) \
+        .eq("email", user.email) \
         .execute()
 
     for item in response.data:
         if item.get("contracts_with_creator"):
             item["contracts_with_creator"]["status"] = check_contract_expiry(item["contracts_with_creator"])
+
+    if redis_client:
+        redis_client.setex(cache_key, 300, json.dumps(response.data))
 
     return response.data
 
@@ -269,6 +285,12 @@ async def download_contract(contract_id: str, user=Depends(get_current_user)):
 @router.get("/contracts")
 async def get_my_contracts(user=Depends(get_current_user)):
 
+    cache_key = f"contracts:my:{user.id}"
+    if redis_client:
+        cached = redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached) if isinstance(cached, str) else cached
+
     response = supabase.table("contracts_with_creator") \
         .select("""
             id,
@@ -293,6 +315,9 @@ async def get_my_contracts(user=Depends(get_current_user)):
 
     for contract in response.data:
         contract["status"] = check_contract_expiry(contract)
+
+    if redis_client:
+        redis_client.setex(cache_key, 300, json.dumps(response.data))
 
     return response.data
 
@@ -353,7 +378,7 @@ async def sign_contract(signee_id: str, user=Depends(get_current_user)):
     signee = supabase.table("contract_signees") \
         .select("*") \
         .eq("id", signee_id) \
-        .eq("user_id", user.id) \
+        .eq("email", user.email) \
         .single() \
         .execute()
 
@@ -451,6 +476,10 @@ async def sign_contract(signee_id: str, user=Depends(get_current_user)):
             .eq("id", contract_id) \
             .execute()
 
+    if redis_client:
+        redis_client.delete(f"contracts:assigned:{user.email}")
+        redis_client.delete(f"contracts:my:{contract.data['owner_id']}")
+
     return {"message": "Digital signature stored"}
 
 
@@ -461,7 +490,7 @@ async def reject_contract(signee_id: str, user=Depends(get_current_user)):
     signee = supabase.table("contract_signees") \
         .select("*") \
         .eq("id", signee_id) \
-        .eq("user_id", user.id) \
+        .eq("email", user.email) \
         .single() \
         .execute()
 
@@ -484,6 +513,12 @@ async def reject_contract(signee_id: str, user=Depends(get_current_user)):
         .update({"status": "REJECTED"}) \
         .eq("id", contract_id) \
         .execute()
+
+    if redis_client:
+        redis_client.delete(f"contracts:assigned:{user.email}")
+        c_info = supabase.table("contracts").select("owner_id").eq("id", contract_id).single().execute()
+        if c_info.data:
+            redis_client.delete(f"contracts:my:{c_info.data['owner_id']}")
 
     return {"message": "Contract rejected"}
 #create contracts
@@ -601,6 +636,11 @@ async def create_contract(
     # Here you would typically call an email service (e.g. Resend)
     # for email in email_list:
     #     send_invite_email(email, contract_data['id'])
+
+    if redis_client:
+        redis_client.delete(f"contracts:my:{owner_id}")
+        for email in email_list:
+            redis_client.delete(f"contracts:assigned:{email}")
 
     return contract_data
 
