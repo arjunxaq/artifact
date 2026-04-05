@@ -1,9 +1,28 @@
-version: "3.9"
+version: '3.9'
 
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: artifact-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+
   frontend:
-    build: ./frontend
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
     container_name: artifact-frontend
     ports:
-      - "3000:80"
-    
+      - "3000:3000"
+    environment:
+      - PORT=3000
+    depends_on:
+      - backend
+    restart: unless-stopped
