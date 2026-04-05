@@ -19,7 +19,6 @@ env_origin = os.getenv("FRONTEND_URL")
 if env_origin:
     origins.append(env_origin)
 
-# If the user sets ALLOW_ALL_ORIGINS in Railway (for testing), handle that safely:
 if os.getenv("ALLOW_ALL_ORIGINS") == "true":
     origins = ["*"]
 

@@ -109,11 +109,7 @@ export default function Signup() {
                     </p>
                 </form>
 
-                <div className="mt-8 text-center max-w-xs mx-auto">
-                    <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em] leading-relaxed">
-                        By signing up, you agree to our Terms of Service and Privacy Policy.
-                    </p>
-                </div>
+
             </div>
         </div>
     );

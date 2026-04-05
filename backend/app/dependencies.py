@@ -12,7 +12,6 @@ async def get_current_user(authorization: str = Header(None)):
         if hasattr(user, 'user') and user.user:
             return user.user
         
-        # If the library returns a response object with .data (v2 style)
         if hasattr(user, 'data') and user.data:
             return user.data
             

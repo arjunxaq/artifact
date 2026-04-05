@@ -71,7 +71,7 @@ export default function Login() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between ml-1">
                                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Password</label>
-                                <a href="#" className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors">Forgot?</a>
+
                             </div>
                             <div className="relative group">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-600 group-focus-within:text-indigo-400 transition-colors" />
@@ -111,9 +111,7 @@ export default function Login() {
                     </p>
                 </form>
 
-                <div className="mt-8 text-center">
-                    <p className="text-[10px] text-zinc-700 font-bold uppercase tracking-[0.2em]">Secure Digital Signatures • Artifact v1.0</p>
-                </div>
+
             </div>
         </div>
     );
