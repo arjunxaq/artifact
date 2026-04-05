@@ -47,14 +47,14 @@ export const AuthProvider = ({ children }) => {
         if (result.data?.session) {
             const token = result.data.session.access_token;
 
-            await fetch((import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api") + "/contracts/link", {
+            await fetch(((import.meta.env.VITE_API_URL ? (import.meta.env.VITE_API_URL.startsWith('http') ? import.meta.env.VITE_API_URL : 'https://' + import.meta.env.VITE_API_URL).replace(/\/api\/?$/, '') + '/api' : 'http://localhost:8000/api')) + "/contracts/link", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
             });
 
-            await fetch((import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api") + "/keys/init", {
+            await fetch(((import.meta.env.VITE_API_URL ? (import.meta.env.VITE_API_URL.startsWith('http') ? import.meta.env.VITE_API_URL : 'https://' + import.meta.env.VITE_API_URL).replace(/\/api\/?$/, '') + '/api' : 'http://localhost:8000/api')) + "/keys/init", {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
