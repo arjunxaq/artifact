@@ -52,7 +52,7 @@ export default function Contracts() {
 
     const handleAssignedView = async (item) => {
         const token = session?.access_token;
-        const res = await fetch(`http://localhost:8000/api/contracts/${item.contracts_with_creator.id}`, {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/contracts/${item.contracts_with_creator.id}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -254,7 +254,7 @@ function ContractModal({ contract, signees, onClose, onStatusUpdate }) {
     };
 
     const handleDownload = async () => {
-        const res = await fetch(`http://localhost:8000/api/contracts/${contract.id}/download`, {
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"}/contracts/${contract.id}/download`, {
             headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (!res.ok) return alert("Download failed.");
