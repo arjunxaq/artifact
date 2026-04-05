@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
     libharfbuzz0b \
     libfontconfig1 \
     libffi-dev \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
