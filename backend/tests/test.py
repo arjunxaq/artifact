@@ -4,7 +4,6 @@ from unittest.mock import Mock, patch
 import sys
 import os
 
-# ✅ SET ENV BEFORE IMPORTS (CRITICAL)
 os.environ["MASTER_KEY"] = "test_master_key_123456"
 os.environ["SUPABASE_URL"] = "https://dummy.supabase.co"
 os.environ["SUPABASE_SERVICE_KEY"] = "dummy_key"
@@ -15,12 +14,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from app.main import app
 
 
+# -------------------------------
+# CLIENT
+# -------------------------------
 @pytest.fixture
 def client():
     return TestClient(app)
 
 
-# ✅ MOCK AUTH PROPERLY
+# -------------------------------
+# MOCK AUTH
+# -------------------------------
 @pytest.fixture(autouse=True)
 def mock_auth():
     mock_user = Mock()
@@ -34,7 +38,9 @@ def mock_auth():
         yield
 
 
-# ✅ MOCK SUPABASE CLIENT SAFELY
+# -------------------------------
+# MOCK SUPABASE (CRITICAL FIX)
+# -------------------------------
 @pytest.fixture(autouse=True)
 def mock_supabase():
     mock_response = Mock()
@@ -47,17 +53,28 @@ def mock_supabase():
     mock_table.select.return_value.execute.return_value = mock_response
     mock_table.insert.return_value.execute.return_value = mock_response
 
-    with patch("app.services.supabase_client.supabase") as mock_supabase:
-        mock_supabase.table.return_value = mock_table
+    with patch("app.routes.contracts.supabase") as contracts_supabase, \
+         patch("app.routes.templates.supabase") as templates_supabase, \
+         patch("app.routes.dashboard.supabase") as dashboard_supabase:
+
+        contracts_supabase.table.return_value = mock_table
+        templates_supabase.table.return_value = mock_table
+        dashboard_supabase.table.return_value = mock_table
+
         yield
 
 
+# -------------------------------
+# AUTH HEADERS
+# -------------------------------
 @pytest.fixture
 def auth_headers():
     return {"Authorization": "Bearer fake-token"}
 
 
-# ---------------- TESTS ---------------- #
+# -------------------------------
+# TESTS
+# -------------------------------
 
 def test_app_starts(client):
     response = client.get("/")
@@ -74,14 +91,13 @@ def test_api_endpoints_authenticated(client, auth_headers):
     for endpoint in endpoints:
         response = client.get(endpoint, headers=auth_headers)
 
-        # ✅ Should not be auth failure
         assert response.status_code != 401
 
 
 def test_contract_creation_validation_authenticated(client, auth_headers):
     response = client.post(
         "/api/contracts",
-        json={},   # ✅ FIXED
+        json={},  
         headers=auth_headers
     )
 
@@ -93,7 +109,7 @@ def test_contract_creation_with_data_authenticated(client, auth_headers):
         "/api/contracts",
         json={
             "title": "Test Contract",
-            "emails": ["test@example.com"]   # ✅ better format
+            "emails": ["test@example.com"]
         },
         headers=auth_headers
     )

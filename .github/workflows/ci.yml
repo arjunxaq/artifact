@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      MASTER_KEY: test_master_key_123456   # ✅ REQUIRED FIX
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_SERVICE_KEY: dummy_key
+      MASTER_KEY: test_master_key_123456
 
     steps:
     - uses: actions/checkout@v4
