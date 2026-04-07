@@ -34,37 +34,75 @@ def mock_auth():
 
 @pytest.fixture(autouse=True)
 def mock_supabase():
-    mock_response = Mock()
-    mock_response.data = []
-    mock_response.count = 0
+    # Create a smart mock that returns appropriate responses based on the query
+    class SmartMockResponse:
+        def __init__(self, data=None, count=None):
+            self.data = data if data is not None else []
+            self.count = count
 
-    # Query builder chain
-    mock_table = Mock()
-    mock_table.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
-    mock_table.select.return_value.eq.return_value.execute.return_value = mock_response
-    mock_table.select.return_value.execute.return_value = mock_response
-    mock_table.insert.return_value.execute.return_value = mock_response
+    class SmartMockTable:
+        def __init__(self):
+            self._call_count = 0
+            self._responses = [
+                SmartMockResponse(count=0),  # managed count
+                SmartMockResponse(count=0),  # assigned count
+                SmartMockResponse(data=[]),  # pending contracts
+                SmartMockResponse(data=[]),  # notifications
+            ]
+
+        def select(self, *args, **kwargs):
+            return self
+
+        def eq(self, *args, **kwargs):
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def execute(self):
+            # Return different responses for dashboard queries
+            if self._call_count < len(self._responses):
+                response = self._responses[self._call_count]
+                self._call_count += 1
+                return response
+            return SmartMockResponse(data=[])
+
+        def insert(self, *args, **kwargs):
+            return self
+
+        def update(self, *args, **kwargs):
+            return self
+
+        def delete(self, *args, **kwargs):
+            return self
+
+    mock_table = SmartMockTable()
 
     mock_client = Mock()
     mock_client.table.return_value = mock_table
+    mock_client.storage.from_.return_value.upload.return_value = None
+    mock_client.storage.from_.return_value.create_signed_url.return_value = "signed-url"
 
-    # Patch ALL entry points
-    with patch("app.services.supabase_client.supabase", mock_client), \
+    # Patch ALL entry points including the supabase client creation
+    with patch("supabase.create_client", return_value=mock_client), \
+         patch("app.services.supabase_client.supabase", mock_client), \
          patch("app.dependencies.supabase", mock_client), \
-         patch("app.routes.contracts.supabase", mock_client), \
-         patch("app.routes.templates.supabase", mock_client), \
-         patch("app.routes.dashboard.supabase", mock_client):
+         patch("app.routes.contracts.supabase", mock_client):
 
         yield
 
 
 @pytest.fixture(autouse=True)
-def block_external_http():
-    with patch("httpx.Client.request") as mock_http:
-        mock_http.return_value = Mock(
-            status_code=200,
-            json=lambda: {}
-        )
+def mock_redis():
+    """Mock Redis client"""
+    mock_redis_client = Mock()
+    mock_redis_client.get.return_value = None
+    mock_redis_client.setex.return_value = None
+    mock_redis_client.delete.return_value = None
+
+    with patch("app.services.redis_service.redis_client", mock_redis_client), \
+         patch("app.routes.contracts.redis_client", mock_redis_client):
+
         yield
 
 
@@ -87,16 +125,16 @@ def test_app_starts(client):
 
 def test_api_endpoints_authenticated(client, auth_headers):
     endpoints = [
-        "/api/contracts",
-        "/api/templates",
-        "/api/dashboard"
+        "/api/contracts",  # GET contracts list
+        "/api/templates",  # GET templates
+        "/api/dashboard"   # GET dashboard
     ]
 
     for endpoint in endpoints:
         response = client.get(endpoint, headers=auth_headers)
 
-        # Must NOT be auth failure
-        assert response.status_code != 401
+        # Must NOT be auth failure - should get past auth layer
+        assert response.status_code != 401, f"Endpoint {endpoint} failed authentication"
 
 
 def test_contract_creation_validation_authenticated(client, auth_headers):

@@ -32,4 +32,4 @@ jobs:
     - name: Run tests
       run: |
         cd backend
-        pytest tests/test.py -v
+        pytest tests/test.py -v -W ignore::DeprecationWarning
