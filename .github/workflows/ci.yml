@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
 on:
   push:
     branches: [ main, develop ]
