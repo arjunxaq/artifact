@@ -4,79 +4,99 @@ from unittest.mock import Mock, patch
 import sys
 import os
 
-# Add the app directory to the Python path
+# ✅ SET ENV BEFORE IMPORTS (CRITICAL)
+os.environ["MASTER_KEY"] = "test_master_key_123456"
+os.environ["SUPABASE_URL"] = "https://dummy.supabase.co"
+os.environ["SUPABASE_SERVICE_KEY"] = "dummy_key"
+
+# Add backend root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.main import app
 
+
 @pytest.fixture
 def client():
-    """Test client fixture"""
     return TestClient(app)
 
+
+# ✅ MOCK AUTH PROPERLY
 @pytest.fixture(autouse=True)
 def mock_auth():
-    """Mock Supabase authentication for all tests"""
     mock_user = Mock()
-    mock_user.id = "550e8400-e29b-41d4-a716-446655440000"  # Valid UUID format
+    mock_user.id = "550e8400-e29b-41d4-a716-446655440000"
     mock_user.email = "test@example.com"
-    
+
     mock_auth_response = Mock()
     mock_auth_response.user = mock_user
-    
-    with patch('app.dependencies.supabase.auth.get_user', return_value=mock_auth_response):
+
+    with patch("app.dependencies.supabase.auth.get_user", return_value=mock_auth_response):
         yield
 
+
+# ✅ MOCK SUPABASE CLIENT SAFELY
 @pytest.fixture(autouse=True)
-def mock_supabase_tables():
-    """Mock Supabase table operations"""
+def mock_supabase():
     mock_response = Mock()
     mock_response.data = []
     mock_response.count = 0
-    
-    # Mock all the table operations that might be called
-    with patch('app.services.supabase_client.supabase.table') as mock_table:
-        mock_table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
-        mock_table.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
-        mock_table.return_value.select.return_value.execute.return_value = mock_response
+
+    mock_table = Mock()
+    mock_table.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
+    mock_table.select.return_value.eq.return_value.execute.return_value = mock_response
+    mock_table.select.return_value.execute.return_value = mock_response
+    mock_table.insert.return_value.execute.return_value = mock_response
+
+    with patch("app.services.supabase_client.supabase") as mock_supabase:
+        mock_supabase.table.return_value = mock_table
         yield
+
 
 @pytest.fixture
 def auth_headers():
-    """Authenticated headers for testing"""
     return {"Authorization": "Bearer fake-token"}
 
+
+# ---------------- TESTS ---------------- #
+
 def test_app_starts(client):
-    """Test that the app starts and can handle requests"""
-    # Test root endpoint (might not exist, but tests if app runs)
     response = client.get("/")
-    assert response.status_code in [200, 404]  # 404 is fine, means routing works
+    assert response.status_code in [200, 404]
+
 
 def test_api_endpoints_authenticated(client, auth_headers):
-    """Test that API endpoints work with authentication"""
-    # Test a few endpoints - they should work with auth (return data or appropriate errors)
     endpoints = [
         "/api/contracts",
-        "/api/templates", 
+        "/api/templates",
         "/api/dashboard"
     ]
-    
+
     for endpoint in endpoints:
         response = client.get(endpoint, headers=auth_headers)
-        # Should not be 401 (unauthorized) anymore - auth is mocked
-        assert response.status_code not in [401]  # Should be 200, 404, or other app errors
+
+        # ✅ Should not be auth failure
+        assert response.status_code != 401
+
 
 def test_contract_creation_validation_authenticated(client, auth_headers):
-    """Test contract creation validation with authentication"""
-    # Test with missing required fields - should get validation error
-    response = client.post("/api/contracts", data={}, headers=auth_headers)
-    assert response.status_code == 422  # Validation error expected
+    response = client.post(
+        "/api/contracts",
+        json={},   # ✅ FIXED
+        headers=auth_headers
+    )
+
+    assert response.status_code == 422
+
 
 def test_contract_creation_with_data_authenticated(client, auth_headers):
-    """Test contract creation with some data and authentication"""
-    response = client.post("/api/contracts", data={
-        "title": "Test Contract",
-        "emails": "test@example.com"
-    }, headers=auth_headers)
-    # Should get past auth, may fail for other reasons (missing template/file)
-    assert response.status_code not in [401]  # Not unauthorized
+    response = client.post(
+        "/api/contracts",
+        json={
+            "title": "Test Contract",
+            "emails": ["test@example.com"]   # ✅ better format
+        },
+        headers=auth_headers
+    )
+
+    # Should pass auth layer
+    assert response.status_code != 401

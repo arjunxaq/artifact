@@ -1,9 +1,5 @@
 name: CI
 
-env:
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-
 on:
   push:
     branches: [ main, develop ]
@@ -14,11 +10,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      MASTER_KEY: test_master_key_123456   # ✅ REQUIRED FIX
+
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -31,4 +32,4 @@ jobs:
     - name: Run tests
       run: |
         cd backend
-        python -m pytest tests/test.py -v
+        pytest tests/test.py -v
