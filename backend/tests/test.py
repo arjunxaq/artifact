@@ -3,69 +3,73 @@ from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 import sys
 import os
+import warnings
 
 os.environ["MASTER_KEY"] = "test_master_key_123456"
 os.environ["SUPABASE_URL"] = "https://dummy.supabase.co"
 os.environ["SUPABASE_SERVICE_KEY"] = "dummy_key"
 
-# Add backend root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.main import app
 
 
-# -------------------------------
-# CLIENT
-# -------------------------------
 @pytest.fixture
 def client():
     return TestClient(app)
 
 
-# -------------------------------
-# MOCK AUTH
-# -------------------------------
 @pytest.fixture(autouse=True)
 def mock_auth():
     mock_user = Mock()
     mock_user.id = "550e8400-e29b-41d4-a716-446655440000"
     mock_user.email = "test@example.com"
 
-    mock_auth_response = Mock()
-    mock_auth_response.user = mock_user
-
-    with patch("app.dependencies.supabase.auth.get_user", return_value=mock_auth_response):
+    # Override dependency directly (cleaner than patching supabase.auth)
+    with patch("app.dependencies.get_current_user", return_value=mock_user):
         yield
 
 
-# -------------------------------
-# MOCK SUPABASE (CRITICAL FIX)
-# -------------------------------
 @pytest.fixture(autouse=True)
 def mock_supabase():
     mock_response = Mock()
     mock_response.data = []
     mock_response.count = 0
 
+    # Query builder chain
     mock_table = Mock()
     mock_table.select.return_value.eq.return_value.order.return_value.execute.return_value = mock_response
     mock_table.select.return_value.eq.return_value.execute.return_value = mock_response
     mock_table.select.return_value.execute.return_value = mock_response
     mock_table.insert.return_value.execute.return_value = mock_response
 
-    with patch("app.routes.contracts.supabase") as contracts_supabase, \
-         patch("app.routes.templates.supabase") as templates_supabase, \
-         patch("app.routes.dashboard.supabase") as dashboard_supabase:
+    mock_client = Mock()
+    mock_client.table.return_value = mock_table
 
-        contracts_supabase.table.return_value = mock_table
-        templates_supabase.table.return_value = mock_table
-        dashboard_supabase.table.return_value = mock_table
+    # Patch ALL entry points
+    with patch("app.services.supabase_client.supabase", mock_client), \
+         patch("app.dependencies.supabase", mock_client), \
+         patch("app.routes.contracts.supabase", mock_client), \
+         patch("app.routes.templates.supabase", mock_client), \
+         patch("app.routes.dashboard.supabase", mock_client):
 
         yield
 
 
+@pytest.fixture(autouse=True)
+def block_external_http():
+    with patch("httpx.Client.request") as mock_http:
+        mock_http.return_value = Mock(
+            status_code=200,
+            json=lambda: {}
+        )
+        yield
+
+
 # -------------------------------
-# AUTH HEADERS
+# HEADERS
 # -------------------------------
 @pytest.fixture
 def auth_headers():
@@ -91,13 +95,14 @@ def test_api_endpoints_authenticated(client, auth_headers):
     for endpoint in endpoints:
         response = client.get(endpoint, headers=auth_headers)
 
+        # Must NOT be auth failure
         assert response.status_code != 401
 
 
 def test_contract_creation_validation_authenticated(client, auth_headers):
     response = client.post(
         "/api/contracts",
-        json={},  
+        json={},   # correct format
         headers=auth_headers
     )
 
