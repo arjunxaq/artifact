@@ -328,7 +328,7 @@ async def get_my_contracts(user=Depends(get_current_user)):
 
 #sign contract
 @router.post("/sign/{token}")
-async def sign_contract(token: str, user=Depends(get_current_user)):
+async def sign_contract_by_token(token: str, user=Depends(get_current_user)):
 
     signee = supabase.table("contract_signees") \
         .select("*") \
@@ -338,6 +338,16 @@ async def sign_contract(token: str, user=Depends(get_current_user)):
 
     if not signee.data:
         raise HTTPException(status_code=404)
+
+    contract_id = signee.data.get("contract_id")
+    if contract_id:
+        contract = supabase.table("contracts").select("*").eq("id", contract_id).single().execute()
+        if contract.data:
+            status = check_contract_expiry(contract.data)
+            if status == "REJECTED":
+                raise HTTPException(status_code=400, detail="Contract rejected")
+            if status == "EXPIRED":
+                raise HTTPException(status_code=400, detail="Contract deadline has passed")
 
     supabase.table("contract_signees") \
         .update({
@@ -351,7 +361,7 @@ async def sign_contract(token: str, user=Depends(get_current_user)):
 
 #reject contract
 @router.post("/reject/{token}")
-async def reject_contract(token: str, user=Depends(get_current_user)):
+async def reject_contract_by_token(token: str, user=Depends(get_current_user)):
 
     signee = supabase.table("contract_signees") \
         .select("*") \
@@ -400,8 +410,11 @@ async def sign_contract(signee_id: str, user=Depends(get_current_user)):
     if not contract.data:
         raise HTTPException(status_code=404, detail="Contract not found")
 
-    if contract.data["status"] == "REJECTED":
+    status = check_contract_expiry(contract.data)
+    if status == "REJECTED":
         raise HTTPException(status_code=400, detail="Contract rejected")
+    if status == "EXPIRED":
+        raise HTTPException(status_code=400, detail="Contract deadline has passed")
 
     pdf_hash = contract.data["pdf_hash"]
 
