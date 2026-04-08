@@ -288,17 +288,40 @@ function DocumentForm({
                         {dynamicFields.length > 0 && (
                             <div className="space-y-4 pt-2">
                                 <label className="text-sm font-medium text-zinc-300 ml-1">Template Variables</label>
-                                <div className="grid grid-cols-1 gap-4">
-                                    {dynamicFields.map(field => (
-                                        <input
-                                            key={field}
-                                            type="text"
-                                            placeholder={field.replace(/_/g, " ").toUpperCase()}
-                                            className="form-input-compact"
-                                            onChange={(e) => handleFieldChange(field, e.target.value)}
-                                            required
-                                        />
-                                    ))}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {dynamicFields.map(field => {
+                                        const lowerField = field.toLowerCase();
+                                        const isDate = lowerField.includes('date');
+                                        const isNumber = lowerField.includes('rent') || lowerField.includes('fee') || lowerField.includes('deposit') || lowerField.includes('amount');
+                                        const isLong = lowerField.includes('terms') || lowerField.includes('description') || lowerField.includes('address');
+                                        
+                                        return (
+                                            <div key={field} className={isLong ? "md:col-span-2" : ""}>
+                                                <label className="text-xs font-semibold text-zinc-400 mb-1 ml-1 block">
+                                                    {field.replace(/_/g, " ").toUpperCase()}
+                                                </label>
+                                                {isLong ? (
+                                                    <textarea
+                                                        placeholder={`Enter ${field.replace(/_/g, " ")}`}
+                                                        className="form-input min-h-[80px]"
+                                                        onChange={(e) => handleFieldChange(field, e.target.value)}
+                                                        required
+                                                    />
+                                                ) : (
+                                                    <div className="relative">
+                                                        {isNumber && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-medium">$</span>}
+                                                        <input
+                                                            type={isDate ? "date" : "text"}
+                                                            placeholder={isDate ? "" : `Enter ${field.replace(/_/g, " ")}`}
+                                                            className={`form-input h-11 ${isNumber ? "pl-7" : ""}`}
+                                                            onChange={(e) => handleFieldChange(field, e.target.value)}
+                                                            required
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

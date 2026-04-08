@@ -93,9 +93,7 @@ export default function Contracts() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <button className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-all">
-                        <Filter className="w-5 h-5" />
-                    </button>
+
                 </div>
             </header>
 
